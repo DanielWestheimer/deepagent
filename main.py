@@ -8,7 +8,7 @@ from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 from langchain_anthropic import ChatAnthropic
 
-# שואבים את הכלים שלנו מקובץ הכלים הנפרד
+# Import the tools from the separate tools file
 from tools import agent_tools
 
 # Load API key from environment
@@ -59,13 +59,28 @@ app = workflow.compile()
 # Local Execution
 # ==========================================
 if __name__ == "__main__":
-    # Modified the request slightly to verify everything works after the split
-    user_input = "List the files in this directory so I can verify that the split to main.py and tools.py was successful."
-    print(f"User: {user_input}\n")
+    print("🤖 Agent ready to work! (Type 'exit' or 'quit' to exit)")
     
-    for event in app.stream({"messages": [("user", user_input)]}):
-        for key, value in event.items():
-            if key == "agent":
-                msg = value["messages"][-1]
-                if msg.content:
-                    print(f"Agent: {msg.content}")
+    while True:
+        try:
+            user_input = input("\nUser: ")
+            
+            if user_input.lower() in ['exit', 'quit']:
+                print("Goodbye!")
+                break
+                
+            if not user_input.strip():
+                continue
+            
+            for event in app.stream({"messages": [("user", user_input)]}):
+                for key, value in event.items():
+                    if key == "agent":
+                        msg = value["messages"][-1]
+                        if msg.content:
+                            print(f"\nAgent: {msg.content}")
+                            
+        except KeyboardInterrupt:
+            print("\nForced exit. Goodbye!")
+            break
+        except Exception as e:
+            print(f"\n[Error]: {str(e)}")
