@@ -1,4 +1,9 @@
 import os
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
+import json
+from pydantic import BaseModel
 from dotenv import load_dotenv
 from typing import Annotated
 from typing_extensions import TypedDict
@@ -8,36 +13,30 @@ from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 from langchain_anthropic import ChatAnthropic
 
-# Import the tools from the separate tools file
+# Import our tools
 from tools import agent_tools
 
-# Load API key from environment
 load_dotenv()
 
-# ==========================================
-# State (The State / Temporary Memory)
-# ==========================================
+# Setting up the API server
+app_api = FastAPI(title="Deep Agent API")
+
+# Define the format for receiving messages from the Web
+class ChatRequest(BaseModel):
+    message: str
+
+# --- LangGraph logic (remains mostly the same) ---
 class AgentState(TypedDict):
     messages: Annotated[list, add_messages]
 
-# Feed the imported tools into a node in the graph
 tool_node = ToolNode(agent_tools)
-
-# ==========================================
-# The Brain (LLM Node)
-# ===========================================
 llm = ChatAnthropic(model="claude-sonnet-4-6")
-
-# Bind the imported tools to the model
 llm_with_tools = llm.bind_tools(agent_tools)
 
 def call_model(state: AgentState):
     response = llm_with_tools.invoke(state['messages'])
     return {"messages": [response]}
 
-# ==========================================
-# The Orchestrator (LangGraph Orchestrator)
-# ===========================================
 def should_continue(state: AgentState):
     last_message = state['messages'][-1]
     if last_message.tool_calls:
@@ -45,42 +44,57 @@ def should_continue(state: AgentState):
     return END
 
 workflow = StateGraph(AgentState)
-
 workflow.add_node("agent", call_model)
 workflow.add_node("tools", tool_node)
-
 workflow.add_edge(START, "agent")
 workflow.add_conditional_edges("agent", should_continue, ["tools", END])
 workflow.add_edge("tools", "agent")
 
-app = workflow.compile()
+agent_app = workflow.compile()
 
-# ==========================================
-# Local Execution
-# ==========================================
-if __name__ == "__main__":
-    print("🤖 Agent ready to work! (Type 'exit' or 'quit' to exit)")
-    
-    while True:
+# --- API endpoint ---
+
+@app_api.get("/")
+async def serve_frontend():
+    return FileResponse("index.html")
+
+@app_api.post("/chat")
+async def chat_endpoint(request: ChatRequest):
+    def event_stream():
         try:
-            user_input = input("\nUser: ")
-            
-            if user_input.lower() in ['exit', 'quit']:
-                print("Goodbye!")
-                break
-                
-            if not user_input.strip():
-                continue
-            
-            for event in app.stream({"messages": [("user", user_input)]}):
-                for key, value in event.items():
-                    if key == "agent":
-                        msg = value["messages"][-1]
-                        if msg.content:
-                            print(f"\nAgent: {msg.content}")
+            # במקום invoke, אנחנו משתמשים ב-stream שעובר צעד-צעד
+            for event in agent_app.stream({"messages": [("user", request.message)]}):
+                for node_name, node_data in event.items():
+                    
+                    # אם המוח (המודל) פועל
+                    if node_name == "agent":
+                        msg = node_data["messages"][-1]
+                        
+                        # אם הוא החליט להפעיל כלי
+                        if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                            for tool in msg.tool_calls:
+                                tool_name = tool["name"]
+                                payload = {
+                                    "type": "thinking", 
+                                    "content": f"🛠️ מפעיל כלי: {tool_name}..."
+                                }
+                                yield f"data: {json.dumps(payload)}\n\n"
+                        
+                        # אם הוא החליט לכתוב לנו תשובה סופית
+                        elif msg.content:
+                            yield f"data: {json.dumps({'type': 'final', 'content': msg.content})}\n\n"
                             
-        except KeyboardInterrupt:
-            print("\nForced exit. Goodbye!")
-            break
+                    # אם הכלי סיים את העבודה
+                    elif node_name == "tools":
+                        yield f"data: {json.dumps({'type': 'thinking', 'content': '✅ הכלי סיים, מנתח תוצאות...'})}\n\n"
+        
         except Exception as e:
-            print(f"\n[Error]: {str(e)}")
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+
+    # מחזירים את התשובה כזרם נתונים חי (Server-Sent Events)
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+# Run the server (only if running directly)
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app_api, host="0.0.0.0", port=8000)
