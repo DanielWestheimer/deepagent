@@ -1,15 +1,15 @@
 <!DOCTYPE html>
-<html lang="he" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Deep Agent - צ׳אט</title>
+    <title>Deep Agent - Chat</title>
     <style>
         * { box-sizing: border-box; }
         body { font-family: system-ui, sans-serif; background: #1e1e2e; margin: 0; display: flex; justify-content: center; height: 100vh; color: #cdd6f4; }
         #app { width: 100%; max-width: 900px; display: flex; flex-direction: column; background: #181825; box-shadow: 0 0 30px rgba(0,0,0,0.5); }
         
-        /* אזור ההודעות */
+        /* Messages area */
         #chat-window { flex: 1; padding: 30px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
         .msg-wrapper { display: flex; width: 100%; }
         .msg { max-width: 75%; padding: 15px 20px; border-radius: 12px; line-height: 1.6; font-size: 16px; white-space: pre-wrap; }
@@ -20,7 +20,7 @@
         .agent-wrapper { justify-content: flex-end; }
         .agent-msg { background: #313244; color: #cdd6f4; border-bottom-left-radius: 2px; border: 1px solid #45475a; }
         
-        /* אזור ההקלדה */
+        /* Input area */
         #input-area { padding: 20px 30px; background: #11111b; display: flex; gap: 15px; align-items: center; border-top: 1px solid #313244; }
         input { flex: 1; padding: 15px 20px; border-radius: 8px; border: 1px solid #45475a; background: #1e1e2e; color: #cdd6f4; font-size: 16px; outline: none; transition: 0.2s; }
         input:focus { border-color: #89b4fa; }
@@ -34,13 +34,13 @@
     <div id="app">
         <div id="chat-window">
             <div class="msg-wrapper agent-wrapper">
-                <div class="msg agent-msg">שלום! אני הסוכן המקומי שלך. איך אפשר לעזור היום?</div>
+                <div class="msg agent-msg">Hello! I'm your local agent. How can I help you today?</div>
             </div>
         </div>
         
         <div id="input-area">
-            <input type="text" id="user-input" placeholder="הקלד פקודה או שאלה..." onkeypress="handleEnter(event)">
-            <button id="send-btn" onclick="sendMessage()">שלח</button>
+            <input type="text" id="user-input" placeholder="Type a command or question..." onkeypress="handleEnter(event)">
+            <button id="send-btn" onclick="sendMessage()">Send</button>
         </div>
     </div>
 
@@ -57,30 +57,30 @@
             const text = inputField.value.trim();
             if (!text) return;
 
-            // 1. הוספת הודעת המשתמש לחלון הצ'אט
+            // 1. Add user message to chat window
             addMessageToDOM(text, 'user');
             inputField.value = '';
             
-            // 2. נעילת שדה הקלט והצגת הודעת טעינה
+            // 2. Disable input field and show loading message
             inputField.disabled = true;
             sendBtn.disabled = true;
-            const typingId = addMessageToDOM('חושב ומבצע...', 'agent');
+            const typingId = addMessageToDOM('Thinking and executing...', 'agent');
             try {
-                // שליחת הבקשה
+                // Send the request
                 const response = await fetch('/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ message: text })
                 });
                 
-                // הכנה לקריאת זרם הנתונים (Streaming)
+                // Prepare to read data stream (Streaming)
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder('utf-8');
                 
                 const msgDiv = document.getElementById(typingId);
-                msgDiv.innerHTML = ""; // מנקים את טקסט הטעינה הראשוני
+                msgDiv.innerHTML = ""; // Clear initial loading text
                 
-                // ניצור שתי תיבות: אחת למחשבות (למעלה בקטן) ואחת לתשובה הסופית
+                // Create two boxes: one for thoughts (small at top) and one for final answer
                 const thinkingBox = document.createElement('div');
                 thinkingBox.style.fontSize = "0.85em";
                 thinkingBox.style.color = "#a6adc8";
@@ -91,38 +91,38 @@
                 const finalAnswerBox = document.createElement('div');
                 msgDiv.appendChild(finalAnswerBox);
 
-                // קריאת הנתונים מהשרת בלייב
+                // Read data from server live
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
                     
                     const chunk = decoder.decode(value, { stream: true });
-                    const lines = chunk.split('\n\n'); // מפרקים את החבילות שהשרת שלח
+                    const lines = chunk.split('\n\n'); // Break down the packets sent by server
                     
                     for (let line of lines) {
                         if (line.startsWith('data: ')) {
                             const data = JSON.parse(line.substring(6));
                             
                             if (data.type === 'thinking') {
-                                // מדפיסים את המחשבה/כלי
+                                // Print the thought/tool
                                 thinkingBox.innerHTML += `<div>${data.content}</div>`;
                                 chatWindow.scrollTop = chatWindow.scrollHeight;
                             } 
                             else if (data.type === 'final') {
-                                // מדפיסים את התשובה הסופית
+                                // Print the final answer
                                 finalAnswerBox.innerText = data.content;
                                 chatWindow.scrollTop = chatWindow.scrollHeight;
                             }
                             else if (data.type === 'error') {
-                                finalAnswerBox.innerText = "❌ שגיאה: " + data.content;
+                                finalAnswerBox.innerText = "❌ Error: " + data.content;
                             }
                         }
                     }
                 }
             }catch (error) {
-                document.getElementById(typingId).innerText = "❌ שגיאת תקשורת. השרת לא מגיב.";
+                document.getElementById(typingId).innerText = "❌ Communication error. Server not responding.";
             } finally {
-                // 5. שחרור החסימה והחזרת הפוקוס לשדה הקלט
+                // 5. Release the lock and return focus to input field
                 inputField.disabled = false;
                 sendBtn.disabled = false;
                 inputField.focus();
@@ -137,14 +137,14 @@
             msgDiv.className = `msg ${sender}-msg`;
             msgDiv.innerText = text;
             
-            // יצירת מזהה ייחודי כדי שנוכל לעדכן את ההודעה מאוחר יותר
+            // Create unique ID so we can update the message later
             const id = 'msg-' + Date.now();
             msgDiv.id = id;
             
             wrapper.appendChild(msgDiv);
             chatWindow.appendChild(wrapper);
             
-            // גלילה אוטומטית למטה
+            // Auto-scroll to bottom
             chatWindow.scrollTop = chatWindow.scrollHeight;
             
             return id;

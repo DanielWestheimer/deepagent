@@ -62,36 +62,36 @@ async def serve_frontend():
 async def chat_endpoint(request: ChatRequest):
     def event_stream():
         try:
-            # במקום invoke, אנחנו משתמשים ב-stream שעובר צעד-צעד
+            # Instead of invoke, we use stream that goes step by step
             for event in agent_app.stream({"messages": [("user", request.message)]}):
                 for node_name, node_data in event.items():
                     
-                    # אם המוח (המודל) פועל
+                    # If the brain (model) is working
                     if node_name == "agent":
                         msg = node_data["messages"][-1]
                         
-                        # אם הוא החליט להפעיל כלי
+                        # If it decided to activate a tool
                         if hasattr(msg, 'tool_calls') and msg.tool_calls:
                             for tool in msg.tool_calls:
                                 tool_name = tool["name"]
                                 payload = {
                                     "type": "thinking", 
-                                    "content": f"🛠️ מפעיל כלי: {tool_name}..."
+                                    "content": f"🛠️ Activating tool: {tool_name}..."
                                 }
                                 yield f"data: {json.dumps(payload)}\n\n"
                         
-                        # אם הוא החליט לכתוב לנו תשובה סופית
+                        # If it decided to write us a final answer
                         elif msg.content:
                             yield f"data: {json.dumps({'type': 'final', 'content': msg.content})}\n\n"
                             
-                    # אם הכלי סיים את העבודה
+                    # If the tool finished its work
                     elif node_name == "tools":
-                        yield f"data: {json.dumps({'type': 'thinking', 'content': '✅ הכלי סיים, מנתח תוצאות...'})}\n\n"
+                        yield f"data: {json.dumps({'type': 'thinking', 'content': '✅ Tool finished, analyzing results...'})}\n\n"
         
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
 
-    # מחזירים את התשובה כזרם נתונים חי (Server-Sent Events)
+    # Return the response as a live data stream (Server-Sent Events)
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 # Run the server (only if running directly)
