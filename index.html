@@ -65,6 +65,7 @@
     </div>
 
     <script>
+        const currentThreadId = crypto.randomUUID();
         const chatWindow = document.getElementById('chat-window');
         const inputField = document.getElementById('user-input');
         const sendBtn = document.getElementById('send-btn');
@@ -90,7 +91,7 @@
                 const response = await fetch('/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: text })
+                    body: JSON.stringify({ message: text, thread_id: currentThreadId })
                 });
                 
                 // Prepare to read data stream (Streaming)

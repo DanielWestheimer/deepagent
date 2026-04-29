@@ -19,6 +19,7 @@ from tools import agent_tools
 from mcp_manager import MCPConnectionConfig, MCPManager
 import asyncio
 from langchain_core.tools import tool
+from langgraph.checkpoint.memory import MemorySaver
 
 load_dotenv()
 mcp_manager = MCPManager()
@@ -30,7 +31,7 @@ async def startup_event():
     global main_loop
     main_loop = asyncio.get_running_loop()
     await mcp_manager.load_saved_servers()
-    
+
 # 2. כלי לאיתור יכולות MCP
 @tool
 def get_mcp_tools() -> str:
@@ -73,6 +74,7 @@ agent_tools.append(run_mcp_tool)
 # Define the format for receiving messages from the Web
 class ChatRequest(BaseModel):
     message: str
+    thread_id: str
 
 # --- LangGraph logic (remains mostly the same) ---
 class AgentState(TypedDict):
@@ -99,7 +101,8 @@ workflow.add_edge(START, "agent")
 workflow.add_conditional_edges("agent", should_continue, ["tools", END])
 workflow.add_edge("tools", "agent")
 
-agent_app = workflow.compile()
+memory = MemorySaver()
+agent_app = workflow.compile(checkpointer=memory)
 
 # --- API endpoint ---
 
@@ -111,8 +114,10 @@ async def serve_frontend():
 async def chat_endpoint(request: ChatRequest):
     def event_stream():
         try:
+            config = {"configurable": {"thread_id": request.thread_id}}
+
             # Instead of invoke, we use stream that goes step by step
-            for event in agent_app.stream({"messages": [("user", request.message)]}):
+            for event in agent_app.stream({"messages": [("user", request.message)]}, config=config):
                 for node_name, node_data in event.items():
                     
                     # If the brain (model) is working
