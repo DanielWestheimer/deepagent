@@ -20,11 +20,13 @@ from mcp_manager import MCPConnectionConfig, MCPManager
 import asyncio
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import MemorySaver
+from fastapi.staticfiles import StaticFiles
 
 load_dotenv()
 mcp_manager = MCPManager()
 main_loop = None
 app_api = FastAPI(title="Deep Agent API")
+app_api.mount("/static", StaticFiles(directory="frontend"), name="static")
 
 @app_api.on_event("startup")
 async def startup_event():
@@ -108,7 +110,7 @@ agent_app = workflow.compile(checkpointer=memory)
 
 @app_api.get("/")
 async def serve_frontend():
-    return FileResponse("index.html")
+    return FileResponse("frontend/index.html")
 
 @app_api.post("/chat")
 async def chat_endpoint(request: ChatRequest):

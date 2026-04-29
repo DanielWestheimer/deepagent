@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+,<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deep Agent - Chat</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: system-ui, sans-serif; background: #1e1e2e; margin: 0; display: flex; justify-content: center; height: 100vh; color: #cdd6f4; }
+        #app { width: 100%; max-width: 900px; display: flex; flex-direction: column; background: #181825; box-shadow: 0 0 30px rgba(0,0,0,0.5); }
+        
+        /* Messages area */
+        #chat-window { flex: 1; padding: 30px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
+        .msg-wrapper { display: flex; width: 100%; }
+        .msg { max-width: 75%; padding: 15px 20px; border-radius: 12px; line-height: 1.6; font-size: 16px; white-space: pre-wrap; }
+        
+        .user-wrapper { justify-content: flex-start; }
+        .user-msg { background: #89b4fa; color: #11111b; border-bottom-right-radius: 2px; }
+        
+        .agent-wrapper { justify-content: flex-end; }
+        .agent-msg { background: #313244; color: #cdd6f4; border-bottom-left-radius: 2px; border: 1px solid #45475a; }
+        
+        /* Input area */
+        #input-area { padding: 20px 30px; background: #11111b; display: flex; gap: 15px; align-items: center; border-top: 1px solid #313244; }
+        input { flex: 1; padding: 15px 20px; border-radius: 8px; border: 1px solid #45475a; background: #1e1e2e; color: #cdd6f4; font-size: 16px; outline: none; transition: 0.2s; }
+        input:focus { border-color: #89b4fa; }
+        button { background: #89b4fa; color: #11111b; border: none; padding: 0 30px; height: 52px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        button:hover { background: #b4befe; }
+        button:disabled { background: #45475a; color: #a6adc8; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+<!-- שורת כותרת עליונה עם כפתור Toggle -->
+        <div style="background: #11111b; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #313244;">
+            <div style="font-weight: bold; color: #89b4fa; font-size: 18px;">🤖 Deep Agent</div>
+            <button onclick="toggleMCP()" style="height: 32px; padding: 0 15px; background: #313244; color: #cdd6f4; font-size: 13px; border-radius: 6px;">🔌 ניהול שרתי MCP</button>
+        </div>
+
+        <!-- סרגל חיבור MCP (מוסתר כברירת מחדל) -->
+        <div id="mcp-panel" style="display: none; background: #1e1e2e; padding: 15px 20px; border-bottom: 1px solid #313244; gap: 10px; flex-wrap: wrap; align-items: center;">
+            <input type="text" id="mcp-name" placeholder="שם (למשל git)" style="width: 120px; padding: 8px;">
+            
+            <select id="mcp-type" style="padding: 8px; border-radius: 8px; background: #11111b; color: #cdd6f4; border: 1px solid #45475a;">
+                <option value="stdio">Stdio (מקומי)</option>
+                <option value="sse">SSE (מרוחק)</option>
+            </select>
+            
+            <input type="text" id="mcp-cmd" placeholder="פקודה / URL" style="width: 150px; padding: 8px;">
+            <input type="text" id="mcp-args" placeholder="ארגומנטים (מופרדים בפסיק)" style="flex: 1; min-width: 150px; padding: 8px;">
+            
+            <button onclick="connectToServer()" style="height: 38px; padding: 0 15px; font-size: 14px;">חבר שרת</button>
+            <div id="mcp-status" style="font-size: 14px; margin-right: 10px; min-width: 80px;"></div>
+        </div>
+    <div id="app">
+        <div id="chat-window">
+            <div class="msg-wrapper agent-wrapper">
+                <div class="msg agent-msg">Hello! I'm your local agent. How can I help you today?</div>
+            </div>
+        </div>
+        
+        <div id="input-area">
+            <input type="text" id="user-input" placeholder="Type a command or question..." onkeypress="handleEnter(event)">
+            <button id="send-btn" onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+    <script src="/static/app.js"></script>
+</body>
+</html>
