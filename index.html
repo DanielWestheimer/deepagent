@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" dir="ltr">
+,<html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -30,7 +30,27 @@
     </style>
 </head>
 <body>
+<!-- שורת כותרת עליונה עם כפתור Toggle -->
+        <div style="background: #11111b; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #313244;">
+            <div style="font-weight: bold; color: #89b4fa; font-size: 18px;">🤖 Deep Agent</div>
+            <button onclick="toggleMCP()" style="height: 32px; padding: 0 15px; background: #313244; color: #cdd6f4; font-size: 13px; border-radius: 6px;">🔌 ניהול שרתי MCP</button>
+        </div>
 
+        <!-- סרגל חיבור MCP (מוסתר כברירת מחדל) -->
+        <div id="mcp-panel" style="display: none; background: #1e1e2e; padding: 15px 20px; border-bottom: 1px solid #313244; gap: 10px; flex-wrap: wrap; align-items: center;">
+            <input type="text" id="mcp-name" placeholder="שם (למשל git)" style="width: 120px; padding: 8px;">
+            
+            <select id="mcp-type" style="padding: 8px; border-radius: 8px; background: #11111b; color: #cdd6f4; border: 1px solid #45475a;">
+                <option value="stdio">Stdio (מקומי)</option>
+                <option value="sse">SSE (מרוחק)</option>
+            </select>
+            
+            <input type="text" id="mcp-cmd" placeholder="פקודה / URL" style="width: 150px; padding: 8px;">
+            <input type="text" id="mcp-args" placeholder="ארגומנטים (מופרדים בפסיק)" style="flex: 1; min-width: 150px; padding: 8px;">
+            
+            <button onclick="connectToServer()" style="height: 38px; padding: 0 15px; font-size: 14px;">חבר שרת</button>
+            <div id="mcp-status" style="font-size: 14px; margin-right: 10px; min-width: 80px;"></div>
+        </div>
     <div id="app">
         <div id="chat-window">
             <div class="msg-wrapper agent-wrapper">
@@ -148,6 +168,67 @@
             chatWindow.scrollTop = chatWindow.scrollHeight;
             
             return id;
+        }
+        async function connectToServer() {
+            const name = document.getElementById('mcp-name').value.trim();
+            const type = document.getElementById('mcp-type').value;
+            const cmdOrUrl = document.getElementById('mcp-cmd').value.trim();
+            const argsStr = document.getElementById('mcp-args').value.trim();
+            const statusDiv = document.getElementById('mcp-status');
+
+            if (!name || !cmdOrUrl) {
+                statusDiv.innerText = "⚠️ חסרים פרטים";
+                statusDiv.style.color = "#f38ba8";
+                return;
+            }
+
+            statusDiv.innerText = "מתחבר...";
+            statusDiv.style.color = "#f9e2af";
+
+            // בניית אובייקט ההגדרות לפי סוג החיבור
+            const payload = { connection_type: type };
+            
+            if (type === 'stdio') {
+                payload.command = cmdOrUrl;
+                payload.args = argsStr ? argsStr.split(',').map(s => s.trim()) : [];
+            } else {
+                payload.url = cmdOrUrl;
+            }
+
+            try {
+                const response = await fetch(`/mcp/connect?server_name=${encodeURIComponent(name)}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    statusDiv.innerText = "✅ מחובר!";
+                    statusDiv.style.color = "#a6e3a1";
+                    // ניקוי השדות לאחר חיבור מוצלח
+                    document.getElementById('mcp-name').value = '';
+                    document.getElementById('mcp-cmd').value = '';
+                    document.getElementById('mcp-args').value = '';
+                    setTimeout(toggleMCP, 1000);
+                } else {
+                    statusDiv.innerText = "❌ שגיאה";
+                    statusDiv.style.color = "#f38ba8";
+                }
+            } catch (error) {
+                statusDiv.innerText = "❌ נפל תקשורת";
+                statusDiv.style.color = "#f38ba8";
+            }
+        }
+
+        function toggleMCP() {
+            const panel = document.getElementById('mcp-panel');
+            if (panel.style.display === 'none') {
+                panel.style.display = 'flex';
+            } else {
+                panel.style.display = 'none';
+            }
         }
     </script>
 </body>

@@ -16,10 +16,59 @@ from langchain_anthropic import ChatAnthropic
 # Import our tools
 from tools import agent_tools
 
-load_dotenv()
+from mcp_manager import MCPConnectionConfig, MCPManager
+import asyncio
+from langchain_core.tools import tool
 
-# Setting up the API server
+load_dotenv()
+mcp_manager = MCPManager()
+main_loop = None
 app_api = FastAPI(title="Deep Agent API")
+
+@app_api.on_event("startup")
+async def startup_event():
+    global main_loop
+    main_loop = asyncio.get_running_loop()
+    await mcp_manager.load_saved_servers()
+    
+# 2. כלי לאיתור יכולות MCP
+@tool
+def get_mcp_tools() -> str:
+    """Use this tool to see what external MCP tools are currently connected and available."""
+    if not mcp_manager.active_sessions:
+        return "No MCP servers connected."
+    
+    result = ""
+    for server_name, session in mcp_manager.active_sessions.items():
+        # שליפת הכלים מהשרת החיצוני
+        future = asyncio.run_coroutine_threadsafe(session.list_tools(), main_loop)
+        response = future.result()
+        for t in response.tools:
+            result += f"Server: {server_name} | Tool: {t.name}\nDescription: {t.description}\nSchema: {t.inputSchema}\n\n"
+    return result
+
+# 3. כלי להפעלת יכולות MCP
+@tool
+def run_mcp_tool(server_name: str, tool_name: str, arguments: dict) -> str:
+    """Run an external MCP tool using the server_name, tool_name, and a dictionary of arguments."""
+    session = mcp_manager.active_sessions.get(server_name)
+    if not session:
+        return f"Server {server_name} not found."
+    
+    try:
+        # שליחת הפקודה לשרת החיצוני והמתנה לתשובה
+        future = asyncio.run_coroutine_threadsafe(session.call_tool(tool_name, arguments), main_loop)
+        response = future.result()
+        
+        # חילוץ הטקסט נטו מהתשובה של השרת
+        texts = [c.text for c in response.content if c.type == "text"]
+        return "\n".join(texts)
+    except Exception as e:
+        return f"MCP Tool Error: {str(e)}"
+
+# 4. הזרקת הגשר לתוך המוח של הסוכן
+agent_tools.append(get_mcp_tools)
+agent_tools.append(run_mcp_tool)
 
 # Define the format for receiving messages from the Web
 class ChatRequest(BaseModel):
@@ -93,6 +142,14 @@ async def chat_endpoint(request: ChatRequest):
 
     # Return the response as a live data stream (Server-Sent Events)
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+@app_api.post("/mcp/connect")
+async def connect_mcp_endpoint(server_name: str, config: MCPConnectionConfig):
+    success = await mcp_manager.connect_to_server(server_name, config)
+    if success:
+        return {"success": True, "message": f"Connected to {server_name}"}
+    else:
+        return {"success": False, "message": "Failed to connect. Check server logs."}
 
 # Run the server (only if running directly)
 if __name__ == "__main__":
