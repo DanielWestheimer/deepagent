@@ -19,7 +19,8 @@ from tools import agent_tools
 from mcp_manager import MCPConnectionConfig, MCPManager
 import asyncio
 from langchain_core.tools import tool
-from langgraph.checkpoint.memory import MemorySaver
+import sqlite3
+from langgraph.checkpoint.sqlite import SqliteSaver
 from fastapi.staticfiles import StaticFiles
 
 load_dotenv()
@@ -103,7 +104,8 @@ workflow.add_edge(START, "agent")
 workflow.add_conditional_edges("agent", should_continue, ["tools", END])
 workflow.add_edge("tools", "agent")
 
-memory = MemorySaver()
+db_conn = sqlite3.connect("chat_history.db", check_same_thread=False)
+memory = SqliteSaver(db_conn)
 agent_app = workflow.compile(checkpointer=memory)
 
 # --- API endpoint ---
@@ -111,6 +113,12 @@ agent_app = workflow.compile(checkpointer=memory)
 @app_api.get("/")
 async def serve_frontend():
     return FileResponse("frontend/index.html")
+
+@app_api.get("/mcp/list")
+async def list_mcp_servers():
+    """מחזיר רשימה של שמות השרתים המחוברים כרגע"""
+    connected_servers = list(mcp_manager.active_sessions.keys())
+    return {"servers": connected_servers}
 
 @app_api.post("/chat")
 async def chat_endpoint(request: ChatRequest):
@@ -157,6 +165,38 @@ async def connect_mcp_endpoint(server_name: str, config: MCPConnectionConfig):
         return {"success": True, "message": f"Connected to {server_name}"}
     else:
         return {"success": False, "message": "Failed to connect. Check server logs."}
+
+@app_api.get("/api/chats")
+async def get_chats_list():
+    """שולף את כל מספרי השיחות הייחודיים ממסד הנתונים"""
+    try:
+        cursor = db_conn.cursor()
+        cursor.execute("""
+            SELECT thread_id, MAX(checkpoint_id) as last_updated 
+            FROM checkpoints 
+            GROUP BY thread_id 
+            ORDER BY last_updated DESC
+        """)
+        threads = [row[0] for row in cursor.fetchall()]
+        return {"threads": threads}
+    except Exception as e:
+        print(f"SQL Error: {e}")
+        return {"threads": []}
+
+@app_api.get("/api/chat/{thread_id}")
+async def get_chat_history(thread_id: str):
+    """שולף את היסטוריית ההודעות של שיחה ספציפית"""
+    config = {"configurable": {"thread_id": thread_id}}
+    state = agent_app.get_state(config)
+    
+    messages = []
+    if state and hasattr(state, 'values') and 'messages' in state.values:
+        for msg in state.values["messages"]:
+            if msg.type in ["human", "ai"] and msg.content:
+                role = "user" if msg.type == "human" else "bot"
+                messages.append({"role": role, "content": msg.content})
+                
+    return {"messages": messages}
 
 # Run the server (only if running directly)
 if __name__ == "__main__":

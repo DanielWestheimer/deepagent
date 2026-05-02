@@ -1,4 +1,4 @@
-        const currentThreadId = crypto.randomUUID();
+        let currentThreadId = crypto.randomUUID();
         const chatWindow = document.getElementById('chat-window');
         const inputField = document.getElementById('user-input');
         const sendBtn = document.getElementById('send-btn');
@@ -103,6 +103,7 @@
             
             return id;
         }
+
         async function connectToServer() {
             const name = document.getElementById('mcp-name').value.trim();
             const type = document.getElementById('mcp-type').value;
@@ -145,6 +146,8 @@
                     document.getElementById('mcp-name').value = '';
                     document.getElementById('mcp-cmd').value = '';
                     document.getElementById('mcp-args').value = '';
+                    
+                    loadMCPServers();
                     setTimeout(toggleMCP, 1000);
                 } else {
                     statusDiv.innerText = "❌ שגיאה";
@@ -164,3 +167,87 @@
                 panel.style.display = 'none';
             }
         }
+
+async function loadMCPServers() {
+    try {
+        const response = await fetch('/mcp/list');
+        const data = await response.json();
+        
+        const listDiv = document.getElementById('mcp-active-list');
+        listDiv.innerHTML = '';
+        
+        if (data.servers.length === 0) {
+            listDiv.innerHTML = '<span style="color: #6c7086; font-size: 12px;">אין שרתים מחוברים</span>';
+            return;
+        }
+        
+        data.servers.forEach(server => {
+            const badge = document.createElement('span');
+            badge.style.cssText = "background: #313244; color: #a6e3a1; padding: 4px 10px; border-radius: 6px; font-size: 12px; border: 1px solid #45475a; display: flex; align-items: center; gap: 5px;";
+            badge.innerHTML = `🔌 ${server}`;
+            listDiv.appendChild(badge);
+        });
+    } catch (error) {
+        console.error("Failed to load MCP servers:", error);
+    }
+}
+
+async function loadChatThreads() {
+    try {
+        const response = await fetch('/api/chats');
+        const data = await response.json();
+        const threadList = document.getElementById('thread-list');
+        threadList.innerHTML = '';
+        
+        data.threads.forEach((threadId, index) => {
+            const btn = document.createElement('button');
+            btn.style.cssText = "background: #1e1e2e; color: #cdd6f4; border: 1px solid #313244; padding: 10px; border-radius: 6px; text-align: right; cursor: pointer; transition: 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;";
+            btn.innerText = `💬 שיחה ${threadId.substring(0, 6)}...`;
+            
+            btn.onclick = () => loadSpecificChat(threadId);
+            threadList.appendChild(btn);
+        });
+    } catch (e) {
+        console.error("Error loading threads:", e);
+    }
+}
+
+function startNewChat() {
+    currentThreadId = crypto.randomUUID(); 
+    document.getElementById('chat-window').innerHTML = `
+        <div class="msg-wrapper agent-wrapper">
+            <div class="msg agent-msg">שלום! אני הסוכן המקומי שלך. איך אפשר לעזור?</div>
+        </div>
+    `;
+    console.log("Started new chat:", currentThreadId);
+}
+
+async function loadSpecificChat(threadId) {
+    currentThreadId = threadId; 
+    const chatWindow = document.getElementById('chat-window'); // התיקון כאן
+    chatWindow.innerHTML = ''; 
+    
+    try {
+        const response = await fetch(`/api/chat/${threadId}`);
+        const data = await response.json();
+        
+        data.messages.forEach(msg => {
+            const wrapper = document.createElement('div');
+            wrapper.className = msg.role === 'user' ? 'msg-wrapper user-wrapper' : 'msg-wrapper agent-wrapper';
+            
+            const bubble = document.createElement('div');
+            bubble.className = msg.role === 'user' ? 'msg user-msg' : 'msg agent-msg';
+            bubble.innerText = msg.content;
+            
+            wrapper.appendChild(bubble);
+            chatWindow.appendChild(wrapper);
+        });
+    } catch (e) {
+        console.error("Error loading chat history:", e);
+    }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    loadMCPServers();
+    loadChatThreads();
+});
