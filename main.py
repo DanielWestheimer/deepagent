@@ -19,6 +19,7 @@ from tools import agent_tools
 from mcp_manager import MCPConnectionConfig, MCPManager
 import asyncio
 from langchain_core.tools import tool
+import os
 import sqlite3
 from langgraph.checkpoint.sqlite import SqliteSaver
 from fastapi.staticfiles import StaticFiles
@@ -103,8 +104,11 @@ workflow.add_node("tools", tool_node)
 workflow.add_edge(START, "agent")
 workflow.add_conditional_edges("agent", should_continue, ["tools", END])
 workflow.add_edge("tools", "agent")
+DB_DIR = "data"
+DB_PATH = os.path.join(DB_DIR, "chat_history.db")
+os.makedirs(DB_DIR, exist_ok=True)
 
-db_conn = sqlite3.connect("chat_history.db", check_same_thread=False)
+db_conn = sqlite3.connect(DB_PATH, check_same_thread=False)
 memory = SqliteSaver(db_conn)
 agent_app = workflow.compile(checkpointer=memory)
 

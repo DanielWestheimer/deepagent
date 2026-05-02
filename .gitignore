@@ -8,6 +8,7 @@ wheels/
 .env
 mcp_config.json
 *.db*
+data/
 
 # Virtual environments
 .venv
