@@ -9,6 +9,6 @@ wheels/
 mcp_config.json
 *.db*
 data/
-
+knowledge_base/
 # Virtual environments
 .venv

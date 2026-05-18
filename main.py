@@ -36,7 +36,6 @@ async def startup_event():
     main_loop = asyncio.get_running_loop()
     await mcp_manager.load_saved_servers()
 
-# 2. כלי לאיתור יכולות MCP
 @tool
 def get_mcp_tools() -> str:
     """Use this tool to see what external MCP tools are currently connected and available."""
@@ -45,14 +44,12 @@ def get_mcp_tools() -> str:
     
     result = ""
     for server_name, session in mcp_manager.active_sessions.items():
-        # שליפת הכלים מהשרת החיצוני
         future = asyncio.run_coroutine_threadsafe(session.list_tools(), main_loop)
         response = future.result()
         for t in response.tools:
             result += f"Server: {server_name} | Tool: {t.name}\nDescription: {t.description}\nSchema: {t.inputSchema}\n\n"
     return result
 
-# 3. כלי להפעלת יכולות MCP
 @tool
 def run_mcp_tool(server_name: str, tool_name: str, arguments: dict) -> str:
     """Run an external MCP tool using the server_name, tool_name, and a dictionary of arguments."""
@@ -61,17 +58,16 @@ def run_mcp_tool(server_name: str, tool_name: str, arguments: dict) -> str:
         return f"Server {server_name} not found."
     
     try:
-        # שליחת הפקודה לשרת החיצוני והמתנה לתשובה
+        # Send the command to the external server and wait for response
         future = asyncio.run_coroutine_threadsafe(session.call_tool(tool_name, arguments), main_loop)
         response = future.result()
         
-        # חילוץ הטקסט נטו מהתשובה של השרת
+        # Extract the plain text from the server's response
         texts = [c.text for c in response.content if c.type == "text"]
         return "\n".join(texts)
     except Exception as e:
         return f"MCP Tool Error: {str(e)}"
 
-# 4. הזרקת הגשר לתוך המוח של הסוכן
 agent_tools.append(get_mcp_tools)
 agent_tools.append(run_mcp_tool)
 
@@ -120,7 +116,7 @@ async def serve_frontend():
 
 @app_api.get("/mcp/list")
 async def list_mcp_servers():
-    """מחזיר רשימה של שמות השרתים המחוברים כרגע"""
+    """Returns a list of currently connected server names"""
     connected_servers = list(mcp_manager.active_sessions.keys())
     return {"servers": connected_servers}
 
@@ -172,7 +168,7 @@ async def connect_mcp_endpoint(server_name: str, config: MCPConnectionConfig):
 
 @app_api.get("/api/chats")
 async def get_chats_list():
-    """שולף את כל מספרי השיחות הייחודיים ממסד הנתונים"""
+    """Retrieves all unique conversation IDs from the database"""
     try:
         cursor = db_conn.cursor()
         cursor.execute("""
@@ -189,7 +185,7 @@ async def get_chats_list():
 
 @app_api.get("/api/chat/{thread_id}")
 async def get_chat_history(thread_id: str):
-    """שולף את היסטוריית ההודעות של שיחה ספציפית"""
+    """Retrieves the message history of a specific conversation"""
     config = {"configurable": {"thread_id": thread_id}}
     state = agent_app.get_state(config)
     
